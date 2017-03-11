@@ -1,0 +1,267 @@
+---
+title: "Re-Interview Process"
+author: "Kumar Singh, Satish"
+date: "March 10, 2017"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    depth: 3
+    fig_width: 8
+    fig_height: 8
+runtime: shiny
+  
+---
+
+
+## Problem Statement
+
+### #5 a. Re-Interview 
+To prepare a dynamic dashboard to showcase the current status of re-interview process in terms of schedule, submissions, > Yes's and No's for different questions. The information can be provided at FU level and the interview stage (1 to 5). 
+
+###### *Use the Interactive Index displayed on Left hand side to jump to specific section.*
+
+## Datasets Used
+**Name** - MSU_EmpDataset.csv
+
+**Location** - http://deliveryengine.mu-sigma.com/eoc/page/site/sample-site/document-details?nodeRef=workspace://SpacesStore/fc32b538-4e28-48f1-9610-c76eb0ee15ee
+
+
+######Note on Technology being used- **R Markdown and R shiny**
+
+Having the problems and resources in hand,its the time to kickstart with our analysis.
+
+The Excel file consists of 3 sheets viz,
+
+*  Feedback
+
+*  Account Data
+
+*  Emp data.
+
+## Data Dictionary
+
+The given data consists of following variables
+
+*  Al_EmpID- Employee ID of AL
+*  EmpID- Employee ID 
+*  Do_you_admire_this_person? - Yes/No
+*  Will_this_raise_effectiveness_in_team?- Yes/No
+*  Will_you_hire_in_team? -Yes/No
+*  Will_this_person_be_effective_team_player?- Yes/NO
+*  Do_you_think_person_can_be_vulnerable_take_accountability? -Yes/No
+*  Can_this_person_become_a_leader?- Yes/No
+*  Interview_Date- Date of interview
+*  Joining_date- Dtae of joining the company
+*  Account- Name of the account
+*  Subgroup- Subgroup in the account
+
+##Preliminary Analysis
+
+Install the necessary packages and Import the data on R studio. Have a look at the data using the `head` function.
+
+```{r echo = F , warning=FALSE, message=FALSE, comment=NA}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = FALSE, comment = NA)
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(plotly)
+library(ggplot2)
+fdbk = readxl::read_excel("MSU_EmpDataset.xlsx", 1)
+acc  = readxl::read_excel("MSU_EmpDataset.xlsx", 2)
+empD = readxl::read_excel("MSU_EmpDataset.xlsx", 3)
+head(fdbk,5)
+head(acc,5)
+head(empD,5)
+```
+Oh! The Data is at Re-Interview Level. Well! 
+
+Visual observation shows that the data present in Account Data sheet is already present in Emp Data sheet.Hence Acccount Data sheet is reduntant.
+
+##R Shiny Interactive Dashboard
+
+R Shiny is an elegant and powerful web framework for building web applications using R. Shiny helps in turning your analyses into interactive web applications.
+
+The first Tab "Home" provides Index of the App developed.
+
+Structure and Summary tab displays the structure and Summary of the dataset.Options are provided for selecting the number of rows and "Search" option that helps in finding the particular details of required Employee.
+
+The Radio buttons to choose continuous or categorical provides brief summary of respective variables.
+
+Distribution of Joining Date and Interview Date (Univariate)
+
+This tab displays the distribution of number of employees participating in re-interviews during the year FY 2016-17. An Additional option of choosing Slice-By variables is provided.
+
+The App developed is quite interactive and self-Explanatory. Have Fun exploring the App...!!!!! 
+
+```{r}
+shinyAppDir(
+  "C:\\final",
+  options = list(
+    width = "100%", height = 600
+  )
+  
+)
+```
+
+##Data Preparation
+
+Data preparation (or data preprocessing) means *manipulation of data* into a form suitable for further analysis and processing.
+
+Here Let's look at the columns and tweak their formats.
+
+Then join the two sheets with primary key being Emp ID using 'merge' function
+```{r}
+fdbk$Interview_Date = dmy(fdbk$Interview_Date)
+empD$JoinDate = ymd(empD$JoinDate)
+fData = merge(fdbk , empD, by = 'EmpID') # join sheets
+
+
+
+```
+We now have an Analytical dataset to begin our research.
+
+Time to explore the structure of data to understand it better.
+
+We can do this by using `str` function.
+```{r}
+str(fData)
+```
+A look at summary of variables using `summary` function 
+```{r}
+summary(fData)
+```
+**Note:**
+
+**1.Score : The response of interviewers "Yes" is considered as value "2" and "No" as value "1" for further analysis.**
+
+**2. The values are displayed when hovered over graphs for specific values. Also zoom option is available. Feel free to download the graphs too.**
+
+##Exploratory Data Analysis and Insights
+
+1. Lets see if month of joining affects their performance in the company.The hypothesis can be stated as follows:
+
+> **H~0~ : Month of Joining doesn't affect performance of Employees in Re-Interview**
+
+> **H~1~ : Month of Joining affects performance of Employees Re-Interview**
+```{r}
+
+year(fData$Interview_Date[!is.na(fData$Interview_Date) &
+                       fData$Interview_Date < '2016-08-09'] ) = 2017
+
+year(fData$Interview_Date[!is.na(fData$Interview_Date) &
+                            fData$Interview_Date > '2017-03-23'] ) = 2016
+                            
+for (i in 4:9){
+  fData[[i]] = as.factor(fData[[i]])
+}
+
+dData = fData
+for (i in 4:9){
+  dData[[i]] = as.numeric(dData[[i]])
+}
+
+a = dData %>% 
+  group_by(EmpID) %>%
+  summarise_at(c("Admire" ,
+                 "Raise_effectiveness", 
+                 "hire_to_team","team_player" ,
+                 "vulnerable" , "become_leader"),funs(mean(., na.rm = TRUE)))
+
+empD$month = months(empD$JoinDate)
+
+a = merge(a, empD[c('month', "EmpID")], by = 'EmpID')
+
+b = a %>% group_by(month) %>% summarise_at(c("Admire" ,
+                                             "Raise_effectiveness", 
+                                             "hire_to_team","team_player" ,
+                                             "vulnerable" , "become_leader"),
+                                           funs(mean(., na.rm = TRUE)))
+c = b[c(4,3,2,1,7,6,5) , ]
+c$month = factor(c$month , levels = c("May","June",
+                                      "July", "August",
+                                      "September", "October", "November"))
+d = gather(c, 'y', 'x', 2:7)
+plot_ly(x = d$month , y = d$x,color = d$y , mode = 'line', type = 'scatter' )  #Plotting Questions asked in Interviews vs Rating given by Interviewers
+```
+Seems like an interesting plot which speaks a lot!! It depicts that the month really matters.
+
+We can see here that Employees joined in the period of July tend to show a lower capability in their interviews compared to September joinees. Why did this happen ? This may be because of the reason that the later got ample amount of time after completing their graduation to be prepared with courses demanded by the industry. 
+
+*The null hypothsis is rejected based on the results obtained.*
+
+2. Lets see how our employees are scoring in Re-Interviews to various questions
+```{r}
+f = dData %>% group_by(EmpID) %>% arrange(Interview_Date) %>% 
+  group_by('int_no.'=row_number() ) %>%
+  summarise_at(c("Admire" ,
+                 "Raise_effectiveness", 
+                 "hire_to_team","team_player" ,
+                 "vulnerable" , "become_leader"),
+               funs(mean(., na.rm = TRUE)))
+
+ggplotly(ggplot(f) + geom_line(aes(int_no., y = Admire, col = 'Admire')) +
+  geom_line(aes(int_no., y = Raise_effectiveness, col = 'Raise_effectiveness')) +
+  geom_line(aes(int_no., y = hire_to_team, col = 'hire_to_team')) +
+  geom_line(aes(int_no., y = team_player, col = 'team_player')) +
+  geom_line(aes(int_no., y = become_leader, col = 'become_leader')) + ylab("Score") + xlab("Interview Number")) 
+```
+The performance looks pretty well. Employees are showing gradual increase in adopting themselves to industry by getting admired, raising the effectiveness in team, showing leadership qualities but the essence of being team player is being lost gradually.
+
+
+
+3. A visualization of Number of Employees being allocated to different accounts. `plot_ly` function is used to plot the graphs.
+
+```{r}
+account = as.data.frame(table(fData$Account)[table(fData$Account)>20])
+plot_ly(account,
+        x = ~Freq , y = ~Var1 ,type='bar')#Plot of Accounts vs No.of Employees
+```
+
+
+4. A visualization of Number of Employees being allocated to different SubGroups. 
+```{r}
+subG = as.data.frame(table(fData$Subgroup)[table(fData$Subgroup)>20])
+
+plot_ly(subG,
+        x = ~Freq , y = ~Var1 ,type='bar')#Plot of Subgroups vs No.of Employees
+```
+From the above graphs it is clear that at account level,most of the employees are allotted to MuSigma (I) account and at a SubGroup level, Learning tracks leads the list.
+
+
+
+5. Now let's categorize Employees based on the scores obtained in Reinterviews with the account they have been allotted. `ggplot` package provides the required graph
+```{r }
+a$tot = rowSums(a[,2:7], na.rm = T)
+a$cat = (cut(a$tot, quantile(a$tot)))
+a = merge(a, empD, by = 'EmpID')
+###########################
+ggplotly(
+ggplot(a[!is.null(a$cat) & !a$Account == "Mu Sigma (I)",]) + geom_bar(aes(x = Account )) +
+  facet_grid(~cat)+ coord_flip() )
+```
+The plot shows that majority of people fall in the 4th quartile i.e(9-12 score) and remaining in the 1st quartile(1-9) score. 
+
+##Conclusion
+
+
+*  **From 1st Graph, The colleges from which students are joining in July month need to be strictly evaluated during campus selection next year as they showcase a very low score in leadership and team spirit.**
+
+
+
+*  **From 2nd Graph, we observe that Team spirit is decreasing in the employees. Hence Re-interviewers need to motivate them and suggest ways to improve their mutual understanding in the team**
+
+*  **From 2nd Graph, we see that employees have moved into delivery accounts by 1st interview but they are in training phase. By the time 2nd Interview begins, they are in the phase of client interaction, timely deliverables because of which the parameters of measurement in Re-interviews decreases due to pressure and work load experienced in accounts.**
+
+
+*  **From the 5th graph it is evident that most of the people are on a higher scale(9-12)**
+
+
+<a href= "#top" > Back To Top </a>
+
+
+
+
+
+</html>
